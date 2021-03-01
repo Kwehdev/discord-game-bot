@@ -1,4 +1,5 @@
 import { Client, Message } from 'discord.js'
+import handleSteamCommand from './commands/steam'
 
 const client = new Client()
 const COMMAND_PREFIX = '?'
@@ -16,8 +17,10 @@ client.on('message', (msg: Message) => {
   const [command, ...args] = msg.content.slice(COMMAND_PREFIX.length).split(' ')
 
   switch (command.toLowerCase()) {
+    case 'steam':
+      return handleSteamCommand(msg, args)
     default:
-      return msg.channel.send('Unknown command.')
+      return msg.channel.send(`Unknown command ${command}`)
   }
 })
 
