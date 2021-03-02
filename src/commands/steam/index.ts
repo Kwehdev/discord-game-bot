@@ -1,6 +1,10 @@
 import { Message, MessageEmbed, MessageReaction } from 'discord.js'
 import DOMParser from 'dom-parser'
-import { getRawHTML } from '../../utils/data'
+import {
+  getRawHTML,
+  handleSteamAPIRequest,
+  SteamAppData,
+} from '../../utils/data'
 import {
   attachMessageReactions,
   createMessageEmbed,
@@ -14,7 +18,7 @@ import { QueryResult } from './types'
 export default async function handleSteamCommand(
   msg: Message,
   query: string[]
-) {
+): Promise<Message> {
   // Handle incorrect syntax or help command.
   if (query.length === 0) {
     return msg.channel.send('Invalid use of command. Try ?steam --help')
@@ -51,6 +55,102 @@ export default async function handleSteamCommand(
   )
 
   const chosenResult = results[chosenEmojiIndex]
+
+  const steamApplicationData = await handleSteamAPIRequest(chosenResult)
+
+  // Delete the message no matter what at this point, to reduce spam.
+  await sentMsg.delete()
+
+  if (!steamApplicationData)
+    return msg.reply(
+      `${Date.now()}: Error retreiving data from Steam API. Please submit a bug report.`
+    )
+
+  const steamApplicationEmbed = createSteamApplicationEmbed(
+    steamApplicationData,
+    chosenResult
+  )
+
+  return msg.channel.send(steamApplicationEmbed)
+}
+
+const createSteamApplicationEmbed = (
+  data: SteamAppData,
+  chosenResult: QueryResult
+) => {
+  const {
+    name,
+    short_description,
+    header_image,
+    price_overview,
+    release_date,
+    metacritic,
+    developers,
+    recommendations,
+  } = data
+
+  const fields = [
+    {
+      name: 'Release date',
+      value: release_date ? release_date.date : 'TBA',
+      inline: true,
+    },
+  ]
+
+  if (metacritic) {
+    fields.push({
+      name: 'Metacritic',
+      value: createMarkdownLink(metacritic.score.toString(), metacritic.url),
+      inline: true,
+    })
+  }
+
+  if (recommendations) {
+    fields.push({
+      name: 'Recommendations',
+      value: recommendations.total.toString(),
+      inline: true,
+    })
+  }
+
+  if (price_overview) {
+    const { initial, final, currency, discount_percent } = price_overview
+    const isDiscounted = discount_percent !== 0
+
+    const formatter = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency,
+    })
+
+    // Format our price display to include discounted price if applicable.
+    fields.push({
+      name: 'Price',
+      value: `${
+        isDiscounted
+          ? `~~${formatter.format(initial / 100)}~~ | ${formatter.format(
+              final / 100
+            )} (-${discount_percent}%)`
+          : formatter.format(final / 100)
+      }`,
+      inline: false,
+    })
+  }
+
+  if (developers) {
+    fields.push({
+      name: 'Developed by',
+      value: developers.join(', '),
+      inline: false,
+    })
+  }
+
+  return createMessageEmbed({
+    title: name,
+    description: short_description,
+    image: header_image,
+    url: chosenResult.url,
+    fields,
+  })
 }
 
 const parseSteam = async (query: string[]) => {
@@ -110,7 +210,7 @@ const createSteamListMessageEmbed = (
   const description = createPreparedListDescription(results)
 
   return createMessageEmbed({
-    title: `Steam results for ${query.join(' ')}`,
+    title: `Steam results for ${query.join(' ')} (${results.length} results)`,
     description,
     url: `https://store.steampowered.com/search/?term=${query.join('%20')}`,
   })
@@ -120,14 +220,16 @@ const createPreparedListDescription = (results: QueryResult[]) => {
   let baseDescription = ''
 
   // Append each result as a list item, create link for each.
-  baseDescription +=
-    results
-      .map(({ appName, url }, i) => {
-        return `${i + 1}. ${createMarkdownLink(formatAppName(appName), url)}`
-      })
-      .join('\n') + '\n'
+  baseDescription += results
+    .map(({ appName, url }, i) => {
+      return `${i + 1}. ${createMarkdownLink(formatAppName(appName), url)}`
+    })
+    .join('\n')
 
   // Add info to instruct user how to interact
+
+  baseDescription += '\r\n\n'
+
   baseDescription +=
     '<:bulb:815220090273267727> React with a number (<:one:815222400542048256>, <:two:815222472793784371>) to filter your results.\n\n'
 
@@ -139,8 +241,7 @@ const createPreparedListDescription = (results: QueryResult[]) => {
 }
 
 // For ease of use
-const createMarkdownLink = (appName: string, url: string) =>
-  `[${appName}](${url})`
+const createMarkdownLink = (value: string, url: string) => `[${value}](${url})`
 
 // Typical name would appear as This_Game__Special Edition, so we format that.
 const formatAppName = (appName: string) =>

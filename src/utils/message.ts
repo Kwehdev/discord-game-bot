@@ -27,18 +27,36 @@ type CreateMessageEmbedArgs = {
   title: string
   description?: unknown
   url: string
+  image?: string
+  fields?: {
+    name: string
+    value: string
+  }[]
 }
 
 export const createMessageEmbed = ({
   title,
   description,
   url,
+  image,
+  fields,
 }: CreateMessageEmbedArgs): MessageEmbed => {
   const messageEmbed = new MessageEmbed()
     .setAuthor('Discord Game Bot')
     .setTitle(title)
     .setURL(url)
+    .setFooter(new Date())
+    .setColor('#16990f')
+
+  // Add desc if exists.
   description && messageEmbed.setDescription(description)
+
+  // Add thumbnail if exists.
+  image && messageEmbed.setImage(image)
+
+  // Add fields if exists.
+  fields && messageEmbed.addFields(fields)
+
   return messageEmbed
 }
 
