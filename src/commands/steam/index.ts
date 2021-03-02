@@ -1,7 +1,14 @@
-import { Message, MessageEmbed } from 'discord.js'
+import { Message, MessageEmbed, MessageReaction } from 'discord.js'
 import DOMParser from 'dom-parser'
 import { getRawHTML } from '../../utils/data'
-import { createMessageEmbed, responseWithDeletion } from '../../utils/message'
+import {
+  attachMessageReactions,
+  createMessageEmbed,
+  getAuthorReaction,
+  getValidEmojis,
+  reactionEmojis,
+  responseWithDeletion,
+} from '../../utils/message'
 import { QueryResult } from './types'
 
 export default async function handleSteamCommand(
@@ -29,8 +36,21 @@ export default async function handleSteamCommand(
     )
   }
 
-  const resultEmbedList = createSteamMessageEmbed(query, results)
-  msg.channel.send(resultEmbedList)
+  const resultEmbedList = createSteamListMessageEmbed(query, results)
+
+  const sentMsg = await msg.channel.send(resultEmbedList)
+
+  const authorReaction = await getUserReaction(sentMsg, msg.author.id, results)
+
+  // If the author didn't react within 30 seconds, or selected the delete emoji, return & delete the message.
+  if (!authorReaction || authorReaction.emoji.name === reactionEmojis.deletion)
+    return sentMsg.delete()
+
+  const chosenEmojiIndex = reactionEmojis.numbers.findIndex(
+    (emoji) => emoji === authorReaction.emoji.name
+  )
+
+  const chosenResult = results[chosenEmojiIndex]
 }
 
 const parseSteam = async (query: string[]) => {
@@ -83,7 +103,7 @@ const parseSteam = async (query: string[]) => {
   }
 }
 
-const createSteamMessageEmbed = (
+const createSteamListMessageEmbed = (
   query: string[],
   results: QueryResult[]
 ): MessageEmbed => {
@@ -118,8 +138,20 @@ const createPreparedListDescription = (results: QueryResult[]) => {
   return baseDescription
 }
 
+// For ease of use
 const createMarkdownLink = (appName: string, url: string) =>
   `[${appName}](${url})`
 
+// Typical name would appear as This_Game__Special Edition, so we format that.
 const formatAppName = (appName: string) =>
-  appName.split('__').join(' - ').split('_').join(' ')
+  appName.replace(/__/g, ' - ').replace(/_/g, ' ')
+
+const getUserReaction = async (
+  sentMsg: Message,
+  authorId: string,
+  results: QueryResult[]
+): Promise<MessageReaction | undefined> => {
+  const validEmojis = getValidEmojis(results.length)
+  await attachMessageReactions(sentMsg, validEmojis)
+  return getAuthorReaction(sentMsg, authorId, validEmojis)
+}
