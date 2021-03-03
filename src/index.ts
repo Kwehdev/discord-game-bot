@@ -1,4 +1,5 @@
 import { Client, Message } from 'discord.js'
+import handleHelpCommand from './commands/help'
 import handleSteamCommand from './commands/steam'
 
 const client = new Client()
@@ -17,6 +18,8 @@ client.on('message', (msg: Message) => {
   const [command, ...args] = msg.content.slice(COMMAND_PREFIX.length).split(' ')
 
   switch (command.toLowerCase()) {
+    case 'help':
+      return handleHelpCommand(msg)
     case 'steam':
       return handleSteamCommand(msg, args)
     default:
