@@ -42,36 +42,50 @@ export default async function handleSteamCommand(
 
   const resultEmbedList = createSteamListMessageEmbed(query, results)
 
-  const sentMsg = await msg.channel.send(resultEmbedList)
+  try {
+    const sentMsg = await msg.channel.send(resultEmbedList)
 
-  const authorReaction = await getUserReaction(sentMsg, msg.author.id, results)
-
-  // If the author didn't react within 30 seconds, or selected the delete emoji, return & delete the message.
-  if (!authorReaction || authorReaction.emoji.name === reactionEmojis.deletion)
-    return sentMsg.delete()
-
-  const chosenEmojiIndex = reactionEmojis.numbers.findIndex(
-    (emoji) => emoji === authorReaction.emoji.name
-  )
-
-  const chosenResult = results[chosenEmojiIndex]
-
-  const steamApplicationData = await handleSteamAPIRequest(chosenResult)
-
-  // Delete the message no matter what at this point, to reduce spam.
-  await sentMsg.delete()
-
-  if (!steamApplicationData)
-    return msg.reply(
-      `${Date.now()}: Error retreiving data from Steam API. Please submit a bug report.`
+    const authorReaction = await getUserReaction(
+      sentMsg,
+      msg.author.id,
+      results
     )
 
-  const steamApplicationEmbed = createSteamApplicationEmbed(
-    steamApplicationData,
-    chosenResult
-  )
+    // If the author didn't react within 30 seconds, or selected the delete emoji, return & delete the message.
+    if (
+      !authorReaction ||
+      authorReaction.emoji.name === reactionEmojis.deletion
+    )
+      return sentMsg.delete()
 
-  return msg.channel.send(steamApplicationEmbed)
+    const chosenEmojiIndex = reactionEmojis.numbers.findIndex(
+      (emoji) => emoji === authorReaction.emoji.name
+    )
+
+    const chosenResult = results[chosenEmojiIndex]
+
+    const steamApplicationData = await handleSteamAPIRequest(chosenResult)
+
+    // Delete the message no matter what at this point, to reduce spam.
+    await sentMsg.delete()
+
+    if (!steamApplicationData)
+      return msg.reply(
+        `${Date.now()}: Error retreiving data from Steam API. Please submit a bug report.`
+      )
+
+    const steamApplicationEmbed = createSteamApplicationEmbed(
+      steamApplicationData,
+      chosenResult
+    )
+
+    return msg.channel.send(steamApplicationEmbed)
+  } catch (e) {
+    // SentMSG needs to exist while operations occur.
+    return msg.channel.send(
+      'Please do not delete a bot message while the bot is being interacted with. Please use ❌ when appropriate.'
+    )
+  }
 }
 
 const createSteamApplicationEmbed = (
